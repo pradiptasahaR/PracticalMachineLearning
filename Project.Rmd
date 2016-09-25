@@ -1,0 +1,73 @@
+---
+title: "Practical Machine Learning Project"
+author: "Pradipta Saha"
+date: "September 25, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## High Level Summary
+
+We formulate a machine learning model to predict the manner in which people did an exercise, based on data from accelerometers from 6 participants. Details of the data are available here :  http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+## Libraries Needed
+```{r libraries, message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+```
+
+## Load Data
+```{r data}
+urlTrain <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(urlTrain, destfile="pml-training.csv")
+urlTest <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(urlTest, destfile="pml-testing.csv")
+dataTrain <- read.csv("pml-training.csv", header=TRUE)
+dataTest <- read.csv("pml-testing.csv", header=TRUE)
+```
+## Create Training and Testing Data Sets
+We randomly assign 70% of the data to the training set.
+```{r partitioning}
+set.seed(30)
+inTrain  <- createDataPartition(dataTrain$classe, p=0.7, list=FALSE)
+dataTrainNew <- dataTrain[inTrain, ]
+dataTestNew  <- dataTrain[-inTrain, ]
+```
+
+
+## Simplify data
+The original data set has 160 columns. Inspection of the data indicates huge number of NA values, and potentially very low variation for some columns. Besides, it is obvious that the first few columns, which are subject identifiers, have no role to play. We preprocess the data to bring it down to 53 columns. We intend to do more exploratory analysis if this still does not give satisfactory results.
+
+```{r simplify}
+NZV <- nearZeroVar(dataTrainNew)
+dataTrainNew <- dataTrainNew[, -NZV]
+dataTestNew  <- dataTestNew[, -NZV]
+
+
+NAFlag    <- sapply(dataTrainNew, function(x) mean(is.na(x))) > 0.95
+dataTrainNew <- dataTrainNew[, NAFlag==FALSE]
+dataTestNew  <- dataTestNew[, NAFlag==FALSE]
+
+
+dataTrainNew <- dataTrainNew[, -(1:6)]
+dataTestNew  <- dataTestNew[, -(1:6)]
+```
+
+## Model and Predict
+We start with a Random Forest model, based on the literature suggesting that this type of modeling often works best for this type of data (high number of features, nonlinearity)
+```{r model}
+set.seed(30)
+control <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modelRF <- train(classe ~ ., data=dataTrainNew, method="rf",trControl=control)
+modelRF$finalModel
+
+predictRF <- predict(modelRF, newdata=dataTestNew)
+confMatRF <- confusionMatrix(predictRF, dataTestNew$classe)
+confMatRF
+```
+## Conclusion
+The random forest method works extremely well both in terms of response time as well as prediction error. We do not see the further need to either fit different modeling approaches or further simplify the data.
